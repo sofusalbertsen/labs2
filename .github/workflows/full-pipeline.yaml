@@ -184,6 +184,11 @@ jobs:
       with:
         name: code 
         path: .
+    - name: Setup Kosli CLI
+      uses: kosli-dev/setup-cli-action@v2
+      with:
+        version:
+          2.11.32
     - name: Assert Compliance
       run: |
         IMAGE_NAME="ghcr.io/${IMAGE}:latest"
