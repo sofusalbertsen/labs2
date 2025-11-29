@@ -41,8 +41,25 @@ jobs:
             --description "Build ${BUILD_NUMBER}: ${GIT_BRANCH}"      
       - name: Build application
         run: bash ci/build-app.sh
+      - name: Attest application artifact
+        run: |
+          JAR_FILE=$(ls app/build/libs/app-*-all.jar)
+          kosli attest artifact ${JAR_FILE} \
+            --artifact-type file \
+            --flow ${APP_NAME}-pipeline \
+            --trail ${GIT_COMMIT} \
+            --name application \
+            --build-url ${BUILD_URL} \
+            --commit-url ${COMMIT_URL}
       - name: Test
         run: bash ci/unit-test-app.sh
+      - name: Attest JUnit test results
+        run: |
+          kosli attest junit \
+            --flow ${APP_NAME}-pipeline \
+            --trail ${GIT_COMMIT} \
+            --name application.unit-tests \
+            --results-dir app/build/test-results/test/
       - name: Upload repo
         uses: actions/upload-artifact@v4
         with: 
@@ -80,6 +97,16 @@ jobs:
       run: bash ci/build-docker.sh
     - name: push docker
       run: bash ci/push-docker.sh
+    - name: Attest Docker image
+      run: |
+        IMAGE_NAME="ghcr.io/${IMAGE}:latest"
+        kosli attest artifact ${IMAGE_NAME} \
+          --artifact-type oci \
+          --flow ${APP_NAME}-pipeline \
+          --trail ${GIT_COMMIT} \
+          --name docker-image \
+          --build-url ${BUILD_URL} \
+          --commit-url ${COMMIT_URL}
 
     - name: Generate SBOM for the docker image
       uses: anchore/sbom-action@v0
@@ -88,6 +115,15 @@ jobs:
         format: 'spdx-json'
         output-file: 'sbom.spdx.json'
         upload-artifact: false
+    - name: Attest SBOM
+      run: |
+        IMAGE_NAME="ghcr.io/${IMAGE}:latest"
+        kosli attest sbom \
+          --flow ${APP_NAME}-pipeline \
+          --trail ${GIT_COMMIT} \
+          --name docker-image.sbom \
+          --artifact-type oci ${IMAGE_NAME} \
+          --sbom sbom.spdx.json
 
   Security-scan:
     runs-on: ubuntu-latest
