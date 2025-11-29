@@ -28,10 +28,10 @@ jobs:
           version:
             2.11.32
 
-    - name: Create/Update Flow
-      run: |
-        kosli create flow ${APP_NAME}-pipeline \
-          --template-file flow-template.yaml
+      - name: Create/Update Flow
+        run: |
+          kosli create flow ${APP_NAME}-pipeline \
+            --template-file flow-template.yaml
 
       - name: Begin Trail
         run: |
