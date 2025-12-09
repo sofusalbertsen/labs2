@@ -18,7 +18,7 @@ env: # Set the secret as an input
 jobs:
   Build:
     runs-on: ubuntu-latest
-    container: gradle:8.0.1-jdk11
+    container: gradle:6-jdk11
     steps:
       - name: Clone down repository
         uses: actions/checkout@v4 
@@ -32,7 +32,7 @@ jobs:
         run: |
           kosli create flow ${APP_NAME}-pipeline \
             --description "CI/CD pipeline for ${APP_NAME} application" \
-            --template-file flow-template.yaml
+            --use-empty-template
 
       - name: Begin Trail
         run: |
@@ -41,25 +41,8 @@ jobs:
             --description "Build ${BUILD_NUMBER}: ${GIT_BRANCH}"      
       - name: Build application
         run: bash ci/build-app.sh
-      - name: Attest application artifact
-        run: |
-          JAR_FILE=$(ls app/build/libs/app-*-all.jar)
-          kosli attest artifact ${JAR_FILE} \
-            --artifact-type file \
-            --flow ${APP_NAME}-pipeline \
-            --trail ${GIT_COMMIT} \
-            --name application \
-            --build-url ${BUILD_URL} \
-            --commit-url ${COMMIT_URL}
       - name: Test
         run: bash ci/unit-test-app.sh
-      - name: Attest JUnit test results
-        run: |
-          kosli attest junit \
-            --flow ${APP_NAME}-pipeline \
-            --trail ${GIT_COMMIT} \
-            --name application.unit-tests \
-            --results-dir app/build/test-results/test/
       - name: Upload repo
         uses: actions/upload-artifact@v4
         with: 
@@ -93,25 +76,16 @@ jobs:
       with:
         name: code
         path: .
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     - name: build docker
       run: bash ci/build-docker.sh
     - name: push docker
       run: bash ci/push-docker.sh
-    - name: Setup Kosli CLI
-      uses: kosli-dev/setup-cli-action@v2
-      with:
-        version:
-          2.11.32
-    - name: Attest Docker image
-      run: |
-        IMAGE_NAME="ghcr.io/${IMAGE}:latest"
-        kosli attest artifact ${IMAGE_NAME} \
-          --artifact-type oci \
-          --flow ${APP_NAME}-pipeline \
-          --trail ${GIT_COMMIT} \
-          --name docker-image \
-          --build-url ${BUILD_URL} \
-          --commit-url ${COMMIT_URL}
 
     - name: Generate SBOM for the docker image
       uses: anchore/sbom-action@v0
@@ -120,20 +94,6 @@ jobs:
         format: 'spdx-json'
         output-file: 'sbom.spdx.json'
         upload-artifact: false
-    - name: Setup Kosli CLI
-      uses: kosli-dev/setup-cli-action@v2
-      with:
-        version:
-          2.11.32
-    - name: Attest SBOM
-      run: |
-        IMAGE_NAME="ghcr.io/${IMAGE}:latest"
-        kosli attest generic \
-          --flow ${APP_NAME}-pipeline \
-          --trail ${GIT_COMMIT} \
-          --name docker-image.sbom \
-          --artifact-type oci ${IMAGE_NAME} \
-          --attachments sbom.spdx.json
 
   Security-scan:
     runs-on: ubuntu-latest
@@ -144,6 +104,12 @@ jobs:
       with:
         name: code
         path: .
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
       with:
@@ -162,6 +128,12 @@ jobs:
       with:
         name: code
         path: .
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     - name: Execute component test
       run: bash ci/component-test.sh
   Performance-test:
@@ -173,6 +145,12 @@ jobs:
       with:
         name: code
         path: .
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     - name: Execute performance test
       run: bash ci/performance-test.sh     
   Deploy:
@@ -184,24 +162,13 @@ jobs:
       with:
         name: code 
         path: .
-    - name: Setup Kosli CLI
-      uses: kosli-dev/setup-cli-action@v2
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
       with:
-        version:
-          2.11.32
-    - name: Update Kosli policy
-      run: kosli create policy labs-prod-requirements .kosli-policy.yml
-    - name: Attach policy to environment
-      run: kosli attach-policy labs-prod-requirements --environment labs-prod
-    - name: Assert Compliance
-      run: |
-        IMAGE_NAME="ghcr.io/${IMAGE}:latest"
-        kosli assert artifact ${IMAGE_NAME} \
-          --artifact-type oci \
-          --flow ${APP_NAME}-pipeline
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     - name: Deploy to production
       run: bash ci/start-application.sh
-    - name: Kosli snapshot environment
-      run: kosli snapshot docker labs-prod
     - name: stop production environment
       run: bash ci/stop-application.sh
